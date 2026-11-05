@@ -1,0 +1,35 @@
+1. Gait Graph
+    Each condition have the same shape
+    Each date have same color
+    Table at the bottom to include legend
+
+2. Pedobarograph
+    Normative data to be created after 
+    Divide foot into thirds
+    Time spent in each section
+    Table of time spent in each section on second page
+    Add normative values to gait output to match shriners output
+    Calculate foot progression angle from rotation of data (out is positive in is negative)
+    Combine pdfs into one file.
+    Order:
+    Static
+    xl-strides
+    right footstrikes
+    left footstrikes
+    select
+    right sequence
+    left sequence
+    graphs
+
+3. Center of pressure from matlab 
+
+4. Walk_DMC
+    Sean to email
+
+5. Gait Profile Score (GPS)
+    Sean to email code
+
+6. Gait Deviation Index
+    Sean to email code
+
+7. VO2 oxygen consumption (Cosmed)

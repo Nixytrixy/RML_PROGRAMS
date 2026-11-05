@@ -1,0 +1,18 @@
+# This repo tracks only what's needed to build and run the Patient Manager
+# app. Everything else in this folder (legacy MATLAB originals, raw data,
+# the "patient test" sandbox, launcher .bat scripts, reference PDFs, etc.)
+# stays on disk but is intentionally untracked.
+/*
+!/.gitignore
+!/RML_PYTHON_TOOLS
+
+# Inside RML_PYTHON_TOOLS: build output and regenerable caches, not source.
+__pycache__/
+*.pyc
+RML_PYTHON_TOOLS/patient_manager/build/
+RML_PYTHON_TOOLS/patient_manager/dist/
+*.zip
+
+# Precomputed pedobarograph norms -- Novel_Processing_23.py already detects
+# when this is missing and offers to recompute it on first run.
+RML_PYTHON_TOOLS/patient_manager/tests/pedobarograph/Novel_Norm/
