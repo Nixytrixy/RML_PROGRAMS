@@ -658,7 +658,7 @@ class AdminPage(ttk.Frame):
         self._eligible_fields = [
             f for f in query_builder.FIELD_CATALOG
             if f.value_type in (query_builder.TEXT, query_builder.INTEGER, query_builder.REAL,
-                                 query_builder.DATE, query_builder.ENUM)
+                                 query_builder.DATE, query_builder.ENUM, query_builder.DIAGNOSIS)
         ]
         self._refresh_required_lists()
 

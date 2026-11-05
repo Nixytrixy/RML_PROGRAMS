@@ -244,7 +244,14 @@ def build_lacking_data_query(
         params.extend(p)
     other_sql = f" {combine} ".join(other_frags) if other_frags else "1=1"
 
-    null_checks = [f"{get_field(c.field_key).table}.{get_field(c.field_key).column} IS NULL" for c in required_conds]
+    def _lacks_field_sql(field: Field) -> str:
+        if field.value_type == DIAGNOSIS:
+            # "Required" for diagnosis isn't about any one diagnosis value --
+            # it's satisfied by having ANY diagnosis recorded at all.
+            return "NOT EXISTS (SELECT 1 FROM patient_diagnoses pd2 WHERE pd2.mrn = p.mrn)"
+        return f"{field.table}.{field.column} IS NULL"
+
+    null_checks = [_lacks_field_sql(get_field(c.field_key)) for c in required_conds]
 
     where = f"({other_sql}) AND ({' OR '.join(null_checks)})"
     if exclude_mrns:
