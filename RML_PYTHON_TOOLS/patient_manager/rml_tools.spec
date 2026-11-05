@@ -2,7 +2,7 @@
 # Build with:  pyinstaller rml_tools.spec
 #
 # Bundles vlc_runtime/ (vendored libvlc.dll, libvlccore.dll, and VLC's plugins/
-# folder -- see video_player.py's module docstring) alongside the exe so video
+# folder  see video_player.py's module docstring) alongside the exe so video
 # playback works on machines that don't have VLC installed.
 
 import os

@@ -9,8 +9,9 @@
 
 $ErrorActionPreference = "Stop"
 
-$RepoRoot = Split-Path -Parent $PSScriptRoot
-$PatientManagerDir = Join-Path $RepoRoot "RML_PYTHON_TOOLS\patient_manager"
+$RmlPythonToolsDir = $PSScriptRoot
+$RepoRoot = Split-Path -Parent $RmlPythonToolsDir
+$PatientManagerDir = Join-Path $RmlPythonToolsDir "patient_manager"
 $VenvPython = Join-Path $RepoRoot ".venv\Scripts\python.exe"
 $SpecFile = Join-Path $PatientManagerDir "rml_tools.spec"
 
@@ -23,8 +24,21 @@ if (-not (Test-Path $SpecFile)) {
 
 Push-Location $PatientManagerDir
 try {
+    # clean wipes build/ first so a stale exe from a prior run (sometimes briefly
+    # locked by OneDrive/antivirus scanning it) can't collide with this one. If the
+    # lock is still held when PyInstaller writes the new exe, retry once after a pause.
     Write-Host "Running PyInstaller ($SpecFile)..."
-    & $VenvPython -m PyInstaller $SpecFile --noconfirm
+    $attempt = 0
+    while ($true) {
+        $attempt++
+        & $VenvPython -m PyInstaller $SpecFile --noconfirm --clean
+        if ($LASTEXITCODE -eq 0) { break }
+        if ($attempt -ge 2) {
+            throw "PyInstaller failed (exit $LASTEXITCODE) after $attempt attempt(s)"
+        }
+        Write-Host "PyInstaller failed (exit $LASTEXITCODE), likely a transient file lock -- retrying in 5s..."
+        Start-Sleep -Seconds 5
+    }
 
     $DistDir = Join-Path $PatientManagerDir "dist\RML_Clinical_Tools"
     if (-not (Test-Path $DistDir)) {
@@ -43,7 +57,7 @@ try {
     Write-Host ""
     Write-Host "Done. Distributable zip:"
     Write-Host "  $ZipPath"
-    Write-Host "Unzip it on the target machine and run RML_Clinical_Tools.exe -- VLC playback works without VLC installed."
+    Write-Host "Unzip it on the target machine and run RML_Clinical_Tools.exe."
 }
 finally {
     Pop-Location
