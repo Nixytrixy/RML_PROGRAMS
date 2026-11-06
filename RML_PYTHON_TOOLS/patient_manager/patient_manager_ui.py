@@ -127,9 +127,12 @@ class FolderStructureSetupDialog(tk.Toplevel):
         self.grab_set()
 
         default_root = patient_store.get_base_dir("Clin").parent
+        subdirs = ", ".join(patient_store.STRUCTURE_SUBDIRS.values())
         msg = (
             "The patient data folder structure could not be found at:\n"
             f"{default_root}\n\n"
+            f"That root folder should contain these subfolders: {subdirs} "
+            "(one per visit type, each holding the patient folders).\n\n"
             "Locate it if it's just been moved (e.g. a different drive letter), "
             "or create a new one to get started."
         )

@@ -902,8 +902,6 @@ def collect_inputs(context=None, parent=None, shared=None):
     the same result dict `main()` used to compute inline; `main(context,
     inputs=...)` just hands it back unchanged.
     """
-    from analysis_registry import make_run_result, default_output_dir, natural_input_dir
-
     plt.ion()
     shared = shared or {}
 
@@ -913,6 +911,7 @@ def collect_inputs(context=None, parent=None, shared=None):
     # ------------------------------------------------------------------
     default_initial = 'Q:\\Goodsam\\CTU RML Data\\'
     if context is not None:
+        from analysis_registry import make_run_result, default_output_dir, natural_input_dir
         suggested = natural_input_dir(context.visit_dir, "pedobarograph")
         default_initial = str(suggested) if suggested else str(context.visit_dir)
     folderdir = shared.get("pedobarograph_data_dir") or uigetdir(
