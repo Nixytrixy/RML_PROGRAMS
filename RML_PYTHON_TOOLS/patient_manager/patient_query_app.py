@@ -271,8 +271,26 @@ class PatientQueryApp(tk.Tk):
         self.geometry("1000x700")
 
         patient_store.init_saved_root()
-        if not patient_store.structure_available():
+        # Ask on the very first launch on this machine (no root confirmed yet), even if
+        # the hardcoded Q:\... default happens to resolve, so nobody ends up pointed at
+        # a folder they never actually chose. save_root() means this won't ask again
+        # once confirmed, unless that saved root stops resolving.
+        if patient_store.load_saved_root() is None or not patient_store.structure_available():
             self._prompt_for_root()
+
+        if patient_store.structure_available():
+            result = patient_store.adopt_folder_tree()
+            if result["patients_adopted"] or result["visits_adopted"]:
+                messagebox.showinfo(
+                    "Existing patient folders found",
+                    f"Imported {result['patients_adopted']} patient folder(s) and "
+                    f"{result['visits_adopted']} visit folder(s) that didn't have "
+                    "records yet.\n\n"
+                    "First names could only be recovered as the initial stored in the "
+                    "folder name, and gender/date of birth weren't stored on disk at "
+                    "all -- please fill those in from the patient's chart when you "
+                    "next open them.",
+                )
 
         self._rows: list[_ConditionRow] = []
         self._results: list[tuple] = []
@@ -280,11 +298,21 @@ class PatientQueryApp(tk.Tk):
 
     def _prompt_for_root(self):
         default_root = patient_store.get_base_dir("Clin").parent
-        messagebox.showwarning(
-            "Patient data folder not found",
-            f"Couldn't find the patient data folder at:\n{default_root}\n\n"
-            "Choose the folder that contains Clinical / Sports_Eval.",
-        )
+        if patient_store.structure_available():
+            if messagebox.askyesno(
+                "Confirm patient data folder",
+                f"Found a patient data folder at:\n{default_root}\n\n"
+                "It contains Clinical / Sports_Eval.\n\nUse this folder?",
+            ):
+                patient_store.apply_root(default_root)
+                patient_store.save_root(default_root)
+                return
+        else:
+            messagebox.showwarning(
+                "Patient data folder not found",
+                f"Couldn't find the patient data folder at:\n{default_root}\n\n"
+                "Choose the folder that contains Clinical / Sports_Eval.",
+            )
         chosen = filedialog.askdirectory(title="Select the folder containing Clinical / Sports_Eval")
         if chosen:
             patient_store.apply_root(chosen)

@@ -542,6 +542,117 @@ def save_visit(record: VisitRecord) -> None:
         pass  # the SQLite index is a best-effort cache -- never block the real save
 
 
+# ---------------------------------------------------------------------------
+# Adoption: backfill patient.json/visit.json for a pre-existing folder tree
+# ---------------------------------------------------------------------------
+
+def adopt_folder_tree() -> dict:
+    """Fresh installs of this app are often pointed at a folder tree that already has
+    years of patient/visit folders created by Clin_New.bat / Sport_New.bat directly --
+    this app is what introduces patient.json/visit.json (and the SQLite index derived
+    from them) in the first place, so those folders start out invisible to
+    list_patients()/list_visits() (both require the JSON to exist).
+
+    Walks every primary folder and DOS subfolder under the current base dirs and writes
+    a patient.json/visit.json for any that don't already have one, deriving fields from
+    the folder name alone (primary_folder_name()'s own convention, parsed by
+    _parse_primary_folder_name()) and from each DOS folder's YYYYMMDD name. Never
+    touches a folder that already has its JSON -- this only fills gaps, it doesn't
+    "correct" anything the app itself already wrote.
+
+    What can and can't be recovered from the folder name alone:
+      - mrn, last_name, visit_type, lab_id: exact, straight from the folder name.
+      - first_name: only the FIRST INITIAL survives in the folder name (that's all
+        Clin_New.bat/Sport_New.bat ever asked for), so it's stored as that single
+        letter until someone fills in the full name via the UI.
+      - gender, date_of_birth, diagnoses, bodyweight/height/leg-length: not encoded in
+        the folder name at all, so these are left at their defaults (gender=1,
+        everything else blank/zero) -- a guess, not a fact, and should be corrected
+        in the UI when known.
+
+    Safe to call every time the app starts: folders that already have their JSON are
+    skipped entirely, so this only ever does work once per legacy folder. Returns
+    {"patients_adopted": N, "visits_adopted": N} for a one-time startup summary.
+    """
+    records_by_mrn: dict[str, PatientRecord] = {}
+    patients_adopted = 0
+    visits_adopted = 0
+
+    for visit_type in VISIT_TYPES:
+        base = get_base_dir(visit_type)
+        if not base.is_dir():
+            continue
+        for entry in sorted(base.iterdir()):
+            if not entry.is_dir():
+                continue
+            parsed = _parse_primary_folder_name(entry.name)
+            if parsed is None or parsed["visit_type"] != visit_type:
+                continue
+            mrn = parsed["mrn"]
+            pfile = entry / "patient.json"
+
+            record = records_by_mrn.get(mrn)
+            if pfile.exists():
+                # Already real -- load just enough to merge a sibling visit_type's
+                # folder onto the same patient below, without touching this file.
+                try:
+                    data = _read_json(pfile)
+                except (OSError, json.JSONDecodeError):
+                    continue
+                if record is None:
+                    last_name = data.get("last_name", "")
+                    first_name = data.get("first_name", "")
+                    patient = Patient(
+                        mrn=mrn, last_name=last_name, first_name=first_name,
+                        name=_display_name(last_name, first_name),
+                        gender=data.get("gender", 1), date_of_birth=data.get("date_of_birth", ""),
+                        diagnoses=data.get("diagnoses", []),
+                    )
+                    record = PatientRecord(
+                        patient=patient, created_at=data.get("created_at", ""),
+                        updated_at=data.get("updated_at", ""), notes=data.get("notes", ""),
+                    )
+                    records_by_mrn[mrn] = record
+                record.type_folders[visit_type] = entry
+                record.lab_ids[visit_type] = data.get("lab_id") or parsed["lab_id"]
+                continue
+
+            if record is None:
+                last_name = _capitalize_first(parsed["last_name"])
+                first_initial = parsed["first_initial"]
+                patient = Patient(mrn=mrn, last_name=last_name, first_name=first_initial,
+                                   name=_display_name(last_name, first_initial))
+                record = PatientRecord(patient=patient)
+                records_by_mrn[mrn] = record
+                patients_adopted += 1
+            record.type_folders[visit_type] = entry
+            record.lab_ids[visit_type] = parsed["lab_id"]
+
+    for record in records_by_mrn.values():
+        if any(not (folder / "patient.json").exists() for folder in record.type_folders.values()):
+            save_patient(record)
+
+    for record in records_by_mrn.values():
+        for visit_type, folder in record.type_folders.items():
+            if not folder.is_dir():
+                continue
+            lab_id = record.lab_ids.get(visit_type, "")
+            for entry in sorted(folder.iterdir()):
+                if not entry.is_dir() or not (entry.name.isdigit() and len(entry.name) == 8):
+                    continue
+                if (entry / "visit.json").exists():
+                    continue
+                dos = entry.name
+                visit = VisitRecord(
+                    visit_type=visit_type, lab_id=lab_id, dos=dos,
+                    date=f"{dos[0:4]}-{dos[4:6]}-{dos[6:8]}", visit_dir=entry,
+                )
+                save_visit(visit)
+                visits_adopted += 1
+
+    return {"patients_adopted": patients_adopted, "visits_adopted": visits_adopted}
+
+
 def record_test_result(visit: VisitRecord, module_name: str, slug: str, display_name: str,
                         status: str, output_dir=None, output_files=None,
                         summary: Optional[dict] = None, error: Optional[str] = None) -> dict:

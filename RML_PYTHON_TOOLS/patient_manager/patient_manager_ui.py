@@ -54,10 +54,30 @@ class PatientManagerApp(tk.Tk):
         self.geometry("1200x800")
 
         patient_store.init_saved_root()
-        if not patient_store.structure_available():
+        # Ask on the very first launch on this machine (no root confirmed yet), even if
+        # the hardcoded Q:\... default happens to resolve -- e.g. a coworker on the same
+        # network as the Q: drive still gets to see/confirm where their data lives,
+        # rather than the app silently picking a path nobody chose. Once confirmed
+        # (default accepted or a different folder picked), save_root() means this
+        # won't ask again unless that saved root stops resolving.
+        if patient_store.load_saved_root() is None or not patient_store.structure_available():
             self.withdraw()
             self.wait_window(FolderStructureSetupDialog(self))
             self.deiconify()
+
+        if patient_store.structure_available():
+            result = patient_store.adopt_folder_tree()
+            if result["patients_adopted"] or result["visits_adopted"]:
+                messagebox.showinfo(
+                    "Existing patient folders found",
+                    f"Imported {result['patients_adopted']} patient folder(s) and "
+                    f"{result['visits_adopted']} visit folder(s) that didn't have "
+                    "records yet.\n\n"
+                    "First names could only be recovered as the initial stored in the "
+                    "folder name, and gender/date of birth weren't stored on disk at "
+                    "all -- please fill those in from the patient's chart when you "
+                    "next open them.",
+                )
 
         # Persistent bar docked as the top row of the window's content area (native
         # OS title bar stays untouched). Only shown once a patient is loaded.
@@ -114,10 +134,11 @@ def _ensure_base_dir_or_prompt(visit_type: str) -> bool:
 
 
 class FolderStructureSetupDialog(tk.Toplevel):
-    """Shown once at startup when neither the default nor a previously-saved patient
-    data folder is reachable (e.g. the Q: network drive isn't mounted on this machine).
-    Lets the user point at an existing folder, create a fresh one, or bail out and
-    fall back on the lazy per-visit-type prompt (_ensure_base_dir_or_prompt) instead."""
+    """Shown on the first launch on this machine (no root confirmed yet) and any time
+    the saved/default patient data folder stops being reachable (e.g. the Q: network
+    drive isn't mounted). Lets the user accept the default (if it resolves), point at
+    an existing folder, create a fresh one, or bail out and fall back on the lazy
+    per-visit-type prompt (_ensure_base_dir_or_prompt) instead."""
 
     def __init__(self, parent: tk.Tk):
         super().__init__(parent)
@@ -128,17 +149,31 @@ class FolderStructureSetupDialog(tk.Toplevel):
 
         default_root = patient_store.get_base_dir("Clin").parent
         subdirs = ", ".join(patient_store.STRUCTURE_SUBDIRS.values())
-        msg = (
-            "The patient data folder structure could not be found at:\n"
-            f"{default_root}\n\n"
-            f"That root folder should contain these subfolders: {subdirs} "
-            "(one per visit type, each holding the patient folders).\n\n"
-            "Locate it if it's just been moved (e.g. a different drive letter), "
-            "or create a new one to get started."
-        )
-        ttk.Label(self, text=msg, wraplength=420, justify="left", padding=16).pack()
+        default_ok = patient_store.structure_available()
 
         btns = ttk.Frame(self, padding=(16, 0, 16, 16))
+
+        if default_ok:
+            msg = (
+                "Found a patient data folder at:\n"
+                f"{default_root}\n\n"
+                f"It contains: {subdirs}.\n\n"
+                "Use this folder, or choose a different one if this isn't where "
+                "your patient data lives."
+            )
+            ttk.Button(btns, text=f"Use This Folder ({default_root})",
+                       command=lambda: self._finish(default_root)).pack(fill="x", pady=4)
+        else:
+            msg = (
+                "The patient data folder structure could not be found at:\n"
+                f"{default_root}\n\n"
+                f"That root folder should contain these subfolders: {subdirs} "
+                "(one per visit type, each holding the patient folders).\n\n"
+                "Locate it if it's just been moved (e.g. a different drive letter), "
+                "or create a new one to get started."
+            )
+        ttk.Label(self, text=msg, wraplength=420, justify="left", padding=16).pack()
+
         btns.pack(fill="x")
         ttk.Button(btns, text="Locate Existing Folder…", command=self._locate).pack(fill="x", pady=4)
         ttk.Button(btns, text="Create New Folder Structure…", command=self._create_new).pack(fill="x", pady=4)
