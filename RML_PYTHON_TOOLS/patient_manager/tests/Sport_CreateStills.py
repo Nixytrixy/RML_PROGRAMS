@@ -123,6 +123,28 @@ FIRST_C3D_RX = re.compile(r"(?i)\b([\w.-]+\.c3d)\b")
 TASK_FROM_C3D_RX = re.compile(r"(?i)\b([A-Za-z]+[A-Za-z0-9]*[_-]\d+)\b")  # e.g., Cut_3, Shuffle_1, Hop-2
 NUM_RX = re.compile(r"[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?")
 
+# Unicode minus sign (U+2212) sometimes shows up instead of ASCII '-' when text is
+# copied from other apps; strip BOM/NBSP that can sneak in from Excel/Notepad saves.
+_SECONDS_CLEAN_RX = re.compile(r"[﻿\xa0\s]")
+
+
+def _parse_seconds_token(tok: str) -> float:
+    """Parse one "seconds" token tolerantly: strips stray whitespace/BOM/NBSP,
+    normalizes a unicode minus sign, and treats a comma as the decimal point
+    when the token has no '.' (some locales write event files as "1,234" instead
+    of "1.234"). Raises ValueError (with the original token in the message) if
+    nothing reasonable comes out."""
+    cleaned = _SECONDS_CLEAN_RX.sub("", tok).replace("−", "-")
+    if "," in cleaned and "." not in cleaned:
+        cleaned = cleaned.replace(",", ".")
+    else:
+        cleaned = cleaned.replace(",", "")
+    try:
+        return float(cleaned)
+    except ValueError:
+        raise ValueError(f"could not parse seconds value {tok!r}") from None
+
+
 def parse_event_file(event_txt: Path) -> EventFileInfo:
     """
     Parse a Visual3D event file with a general format.
